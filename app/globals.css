@@ -1,8 +1,13 @@
 
-nav{
+header{
   background-color: red;
   padding: 1% 5% 1% 5%;
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.Link{
+  text-decoration: none;
+  color: black;
 }
