@@ -25,15 +25,33 @@ export default function Screen() {
 
   const colorMap = useLoader(TextureLoader, 'Textures/world.jpg')
 
+  function latLngToVector3(lat: number, lng: number, radius: number) {
+  const phi = (90 - lat) * (Math.PI / 180);
+  const theta = (lng + 180) * (Math.PI / 180);
+
+  return {
+    x: -radius * Math.sin(phi) * Math.cos(theta),
+    y:  radius * Math.cos(phi),
+    z:  radius * Math.sin(phi) * Math.sin(theta),
+  };
+}
+
+
+
   return (
     <div style={{ height: "100vh" }}>
       <Canvas camera={{ position: [3, 3, 3] }}>
         <ambientLight intensity={0.5} />
         <directionalLight position={[5, 5, 5]} />
-        <mesh rotation={[0.4, 0.2, 0]}>
+        <mesh onPointerDown={(e) => {
+            console.log("Point:", e.point); 
+          }} >
           <sphereGeometry />
           <meshStandardMaterial map={colorMap} />
         </mesh>
+
+       
+    
        
         <OrbitControls />
       </Canvas>
