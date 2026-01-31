@@ -1,16 +1,68 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import styles from "./screen.module.css";
 
 import { Canvas, ThreeEvent, useLoader } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import { TextureLoader } from "three";
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { Clone, OrbitControls, useGLTF } from "@react-three/drei";
+import { Quaternion, TextureLoader, Vector3 } from "three";
 
+type GlobePoint = [number, number, number];
+type PlaneMarker = {
+  position: GlobePoint;
+  rotation: [number, number, number, number];
+};
+
+function Plane({ marker }: { marker: PlaneMarker }) {
+  const gltf = useGLTF("/Models/Untitled.glb");
+  const orientation = useMemo(
+    () =>
+      new Quaternion(
+        marker.rotation[0],
+        marker.rotation[1],
+        marker.rotation[2],
+        marker.rotation[3]
+      ),
+    [marker.rotation]
+  );
+
+  return (
+    <group position={marker.position} quaternion={orientation} scale={0.0005}>
+      <Clone object={gltf.scene} />
+    </group>
+  );
+}
+
+function Scene({
+  markers,
+  onMarker,
+}: {
+  markers: PlaneMarker[];
+  onMarker: (event: ThreeEvent<PointerEvent>) => void;
+}) {
+  const colorMap = useLoader(TextureLoader, "/Textures/earthmap1k.jpg");
+
+  return (
+    <>
+      <ambientLight intensity={1} />
+      <directionalLight position={[5, 5, 5]} />
+      <mesh onPointerDown={onMarker}>
+        <icosahedronGeometry args={[1, 12]} />
+        <meshStandardMaterial map={colorMap} />
+      </mesh>
+      <OrbitControls enablePan={false} minDistance={1.3} maxDistance={2} />
+      {markers.map((marker, i) => (
+        <Plane
+          key={`${i}-${marker.position.join("-")}`}
+          marker={marker}
+        />
+      ))}
+    </>
+  );
+}
 
 export default function Screen() {
-  const [points, setPoints] = useState<[number, number, number][]>([]);
+  const [markers, setMarkers] = useState<PlaneMarker[]>([]);
   const [data, setData] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -24,10 +76,6 @@ export default function Screen() {
       });
   }, []);
 
-  if (loading) return <p>Loading...</p>;
-
-  const colorMap = useLoader(TextureLoader, "/textures/earthmap1k.jpg");
-
   function latLngToVector3(lat: number, lng: number, radius: number) {
     const phi = (90 - lat) * (Math.PI / 180);
     const theta = (lng + 180) * (Math.PI / 180);
@@ -39,45 +87,35 @@ export default function Screen() {
     };
   }
 
-
-  function Marker(e: ThreeEvent<PointerEvent>){
+  function Marker(e: ThreeEvent<PointerEvent>) {
     e.stopPropagation();
-            const p = e.point;
-            setPoints((prev) => [...prev, [p.x, p.y, p.z]]);
-
- 
+    const normal = e.point.clone().normalize();
+    const position = normal.clone().multiplyScalar(1.02);
+    const alignQuat = new Quaternion().setFromUnitVectors(
+      new Vector3(0, 1, 0),
+      normal
+    );
+    const heading = Math.random() * Math.PI * 2;
+    const headingQuat = new Quaternion().setFromAxisAngle(normal, heading);
+    alignQuat.premultiply(headingQuat);
+    const marker: PlaneMarker = {
+      position: [position.x, position.y, position.z],
+      rotation: [alignQuat.x, alignQuat.y, alignQuat.z, alignQuat.w],
+    };
+    setMarkers((prev) => [...prev, marker]);
   }
-  function Plane() {
-  const gltf = useLoader(GLTFLoader, '/Models/Untitled.glb')
-  return <primitive object={gltf.scene}  scale={0.0005}/>
-}
 
-
+  if (loading) return <p>Loading...</p>;
 
   return (
     <div className={styles.main}>
       <Canvas camera={{ position: [1, 1, 1] }}>
-        <ambientLight intensity={1} />
-        <directionalLight position={[5, 5, 5]} />
-        <mesh
-           onPointerDown={(e) => {
-              Marker(e);
-          }}
-        >
-          <icosahedronGeometry args={[1, 12]} />
-          <meshStandardMaterial map={colorMap} />
-        </mesh>
-
-        <OrbitControls enablePan={false}minDistance={1.3} maxDistance={2}/>
-
-        {points.map((pos, i) => (
-          <mesh key={i} position={pos}>
-             <Plane/>
-            <meshStandardMaterial />
-          </mesh>
-        ))}
-
+        <Suspense fallback={null}>
+          <Scene markers={markers} onMarker={Marker} />
+        </Suspense>
       </Canvas>
     </div>
   );
 }
+
+useGLTF.preload("/Models/Untitled.glb");
